@@ -2,6 +2,10 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Elite Ar">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Elite Ar — Gestor VRF</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -186,6 +190,27 @@ input[type=date]:focus{border-color:var(--teal-xl)}
 .login-footer{margin-top:2rem;font-size:.62rem;color:rgba(255,255,255,.25);letter-spacing:.1em;text-transform:uppercase;text-align:center}
 .login-screen.hidden{display:none}
 
+
+/* GALERIA DE FOTOS */
+.gallery-floor{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:1rem;margin-bottom:.85rem}
+.gallery-floor-name{font-family:'Cormorant Garamond',serif;font-size:.95rem;font-weight:700;color:var(--gold);margin-bottom:.75rem;display:flex;align-items:center;gap:.5rem}
+.gallery-floor-name .cnt{font-family:'Outfit',sans-serif;font-size:.65rem;font-weight:400;color:var(--muted);background:var(--bg);border:1px solid var(--line);padding:.1rem .5rem;border-radius:99px}
+.gallery-group{margin-bottom:.85rem}
+.gallery-group:last-child{margin-bottom:0}
+.gallery-group-label{font-size:.68rem;color:var(--muted);margin-bottom:.45rem;line-height:1.4}
+.gallery-thumbs{display:flex;gap:.5rem;flex-wrap:wrap}
+.gallery-thumb{width:72px;height:72px;border-radius:8px;object-fit:cover;border:1px solid var(--line);cursor:pointer;transition:transform .15s}
+.gallery-thumb:active{transform:scale(.95)}
+.gallery-empty{text-align:center;padding:2.5rem 1rem;color:var(--muted);font-size:.82rem;line-height:1.6}
+.gallery-empty .ico{font-size:2.5rem;margin-bottom:.75rem;opacity:.6}
+
+/* VIEWER FOTO GESTOR */
+.gphoto-viewer{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.93);display:none;align-items:center;justify-content:center;flex-direction:column;padding:1.5rem}
+.gphoto-viewer.show{display:flex}
+.gphoto-viewer img{max-width:100%;max-height:78vh;border-radius:10px;object-fit:contain}
+.gphoto-close{position:absolute;top:1.5rem;right:1.5rem;width:42px;height:42px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:99px;color:white;font-size:1.3rem;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.gphoto-label{color:rgba(255,255,255,.7);font-size:.8rem;margin-top:1rem;text-align:center;max-width:90%;line-height:1.4}
+
 </style>
 </head>
 <body>
@@ -295,7 +320,18 @@ input[type=date]:focus{border-color:var(--teal-xl)}
   <div class="empty"><div class="ico">📋</div><h3>Aguardando relatório</h3><p>O prestador deve abrir o checklist e clicar em<br><strong>Enviar Relatório ao Gestor</strong></p></div>
 </div>
 
+<!-- GALERIA DE FOTOS -->
+<div class="sec">📷 Registro Fotográfico</div>
+<div id="galleryContainer"></div>
+
 <div class="footer">Elite Ar · Soluções em Engenharia Térmica · Painel de Gestão VRF</div>
+</div>
+
+<!-- VIEWER FOTO -->
+<div class="gphoto-viewer" id="gphotoViewer" onclick="fecharFotoGestor()">
+  <div class="gphoto-close" onclick="fecharFotoGestor()">✕</div>
+  <img id="gphotoImg" src="" alt="" onclick="event.stopPropagation()">
+  <div class="gphoto-label" id="gphotoLabel"></div>
 </div>
 
 <script>
@@ -454,6 +490,60 @@ function contarFotosAndar(ai){
   return n;
 }
 
+// ════ GALERIA DE FOTOS ════
+function renderGallery(){
+  var cont=document.getElementById('galleryContainer');
+  if(!cont)return;
+  var total=0;
+  Object.keys(FOTOS_RECEBIDAS).forEach(function(k){ total+=(FOTOS_RECEBIDAS[k]||[]).length; });
+  if(total===0){
+    cont.innerHTML='<div class="gallery-empty"><div class="ico">📷</div>Nenhuma foto recebida ainda.<br>As fotos tiradas pelo prestador aparecerão aqui.</div>';
+    return;
+  }
+  var html='';
+  ANDAR_NOMES.forEach(function(nomeAndar,ai){
+    // coleta fotos deste andar
+    var grupos=[];
+    Object.keys(FOTOS_RECEBIDAS).forEach(function(k){
+      var parts=k.split('_');
+      if(parts[0]===String(ai) && (FOTOS_RECEBIDAS[k]||[]).length){
+        var fid=parts[1], ei=parseInt(parts[2]);
+        var faseDef=FASES_D.find(function(f){return f.id===fid;});
+        var label=faseDef?(faseDef.nome+' — '+faseDef.etapas[ei]):'Etapa';
+        grupos.push({key:k,label:label,fotos:FOTOS_RECEBIDAS[k]});
+      }
+    });
+    if(!grupos.length)return;
+    var cnt=grupos.reduce(function(a,g){return a+g.fotos.length;},0);
+    html+='<div class="gallery-floor"><div class="gallery-floor-name">'+nomeAndar+'<span class="cnt">'+cnt+' foto'+(cnt!==1?'s':'')+'</span></div>';
+    grupos.forEach(function(g){
+      html+='<div class="gallery-group"><div class="gallery-group-label">'+g.label.replace(/</g,'&lt;')+'</div><div class="gallery-thumbs">';
+      g.fotos.forEach(function(src,idx){
+        html+='<img class="gallery-thumb" src="'+src+'" onclick="verFotoGestor(\''+g.key+'\','+idx+')">';
+      });
+      html+='</div></div>';
+    });
+    html+='</div>';
+  });
+  cont.innerHTML=html;
+}
+
+function verFotoGestor(key,idx){
+  var arr=FOTOS_RECEBIDAS[key]||[];
+  if(!arr[idx])return;
+  var parts=key.split('_');
+  var ai=parseInt(parts[0]), fid=parts[1], ei=parseInt(parts[2]);
+  var faseDef=FASES_D.find(function(f){return f.id===fid;});
+  var label=(ANDAR_NOMES[ai]||'')+' · '+(faseDef?(faseDef.nome+' — '+faseDef.etapas[ei]):'');
+  document.getElementById('gphotoImg').src=arr[idx];
+  document.getElementById('gphotoLabel').textContent=label;
+  document.getElementById('gphotoViewer').classList.add('show');
+}
+function fecharFotoGestor(){
+  document.getElementById('gphotoViewer').classList.remove('show');
+}
+
+
 function exportarPDF(ai){
   var jsPDFLib = window.jspdf && window.jspdf.jsPDF;
   if(!jsPDFLib){ alert('Biblioteca PDF não carregou. Verifique a internet e tente de novo.'); return; }
@@ -586,6 +676,7 @@ function lerRelatorio(){
       document.getElementById('syncDot').className='sync-dot live';
       document.getElementById('syncTime').textContent=new Date().toLocaleTimeString('pt-BR');
       render();
+      renderGallery();
     }
   }catch(e){
     document.getElementById('syncTxt').textContent='Erro ao ler relatório: '+e.message;
@@ -809,6 +900,7 @@ renderAndaresList();
 renderMission();
 render();
 lerRelatorio();
+renderGallery();
 </script>
 </body>
 </html>
